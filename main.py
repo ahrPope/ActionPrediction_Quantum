@@ -98,6 +98,41 @@ def LSTM_EMBEDDING_MODEL(NUMBER_OF_ACTIONS, NUMBER_OF_DISTINCT_ACTIONS, embeddin
 
     return Model(actions, output_action)
 
+def LSTM_MODEL_QUANTUM(NUMBER_OF_ACTIONS, NUMBER_OF_DISTINCT_ACTIONS, qnode, weight_shapes, n_qubits):
+    # input layer with action sequences sliding window
+    actions = Input(shape=(NUMBER_OF_ACTIONS,1), name='actions')
+
+    # lstm layer
+    lstm = LSTM(512, input_shape=(None,NUMBER_OF_ACTIONS), name='lstm')
+    
+    dense= Dense(8, activation='relu', name='dense_0')
+    qlayer = qml.qnn.KerasLayer(qnode, weight_shapes, output_dim= n_qubits, name="qlayer")
+    
+    # classification layer fully connected with dropout
+    dense_1 = Dense(1024, activation='relu', name='dense_1')
+    drop_1 = Dropout(0.8, name='drop_1')
+    dense_2 = Dense(1024, activation='relu', name='dense_2')
+    drop_2 = Dropout(0.8, name='drop_2')
+    output_action = Dense(NUMBER_OF_DISTINCT_ACTIONS, activation='softmax', name='output_action')
+
+    return tf.keras.models.Sequential([actions, lstm, dense, qlayer, dense_1, drop_1, dense_2, drop_2, output_action])
+
+def LSTM_MODEL(NUMBER_OF_ACTIONS, NUMBER_OF_DISTINCT_ACTIONS):
+    # input layer with action sequences sliding window
+    actions = Input(shape=(NUMBER_OF_ACTIONS,1), name='actions')
+
+    # lstm layer
+    lstm = LSTM(512, name='lstm')(actions)
+    
+    # classification layer fully connected with dropout
+    dense_1 = Dense(1024, activation='relu', name='dense_1')(lstm)
+    drop_1 = Dropout(0.8, name='drop_1')(dense_1)
+    dense_2 = Dense(1024, activation='relu', name='dense_2')(drop_1)
+    drop_2 = Dropout(0.8, name='drop_2')(dense_2)
+    output_action = Dense(NUMBER_OF_DISTINCT_ACTIONS, activation='softmax', name='output_action')(drop_2)
+
+    return Model(actions, output_action)
+
 
 def main(argv):
 
@@ -105,7 +140,7 @@ def main(argv):
 
     parser.add_argument("--neuralNetworkType",
                         type=str,
-                        default="MULTI_CNN_EMBEDDING_QUANTUM",
+                        default="LSTM_MODEL",
                         nargs="?",
                         help="Dataset file name")
     
@@ -189,6 +224,10 @@ def main(argv):
     elif args.neuralNetworkType == "LSTM_EMBEDDING": 
         model = LSTM_EMBEDDING_MODEL(5, len(unique_actions), embedding_matrix, embedding_size, trainable_embeddings)
 
+    elif args.neuralNetworkType == "LSTM_MODEL_QUANTUM":
+        model = LSTM_MODEL_QUANTUM(5, len(unique_actions), qnode_a, weight_shapes, n_qubits)
+    elif args.neuralNetworkType == "LSTM_MODEL":
+            model = LSTM_MODEL(5, len(unique_actions))
 
 
     ############################################
@@ -228,7 +267,7 @@ def main(argv):
     fitting = model.fit(X_actions_train.tolist(), 
                         y_train.tolist(), 
                         batch_size=64, 
-                        epochs=60, 
+                        epochs=1000, 
                         validation_data=(X_actions_test.tolist(), y_test.tolist()))
 
     predictions = model.predict(X_actions_test, 128)
